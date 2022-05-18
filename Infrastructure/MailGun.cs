@@ -53,17 +53,18 @@ namespace MailGun_API.Infrastructure
                 int result = sqlCommand.ExecuteNonQuery();
                 sqlConnection.Close();
                 //var test = File.ReadAllText(@"C:\Users\Bhagat\Desktop\json.txt");
-               // _ = SaveAttachments(test);
-               _ = SaveAttachments(mailGunDTO.Attachments);
+                // _ = SaveAttachments(test);
+                if (!string.IsNullOrEmpty(mailGunDTO.Attachments))
+                {
+                    _ = SaveAttachments(mailGunDTO.Attachments);
+                }
+               
                 return result > 0 ? true : false;
             }
         }
 
         public bool SaveAttachments(string jsonAttachments)
         {
-            var attachmentResponse = new List<MailGunAttachment>();
-            var memoryStreamAttachments = new MemoryStream(Encoding.Unicode.GetBytes(jsonAttachments));
-            var serializerAttachments = JsonConvert.SerializeObject(jsonAttachments);
             var attachmentsList  = JsonConvert.DeserializeObject<List<MailGunAttachment>>(jsonAttachments);
             var path = Path.Combine(_environment.ContentRootPath, "/EmailAttachments/");
 
