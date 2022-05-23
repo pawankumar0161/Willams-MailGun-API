@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Hosting;
 using System.Net.Http;
 using System.Net;
 using System.Configuration;
+using System.Data;
 
 namespace MailGun_API.Infrastructure
 {
@@ -27,7 +28,7 @@ namespace MailGun_API.Infrastructure
 
         public bool SaveMailGunEmail(MailGunDTO mailGunDTO)
         {
-            string insertSql = "INSERT INTO Emails(messageID, datesent, recipients, cc, bcc, sender, [from], subject, [body-plain], [stripped-text], [stripped-signature], [stripped-html], attachments, [message-url], [content-id-map], [message-headers]) VALUES (@messageid, @dateinserted, @recipients, @cc, @bcc, @sender, @from, @subject, @bodyplain, @strippedtext, @strippedsignature, @strippedhtml, @attachments, @messageurl, @contentidmap, @messageheaders)";
+            string insertSql = "INSERT INTO Emails(messageID, datesent, recipients, cc, bcc, sender, [from], subject, [body-plain], [stripped-text], [stripped-signature], [stripped-html], attachments, [message-url], [content-id-map], [message-headers]) OUTPUT INSERTED.ID VALUES (@messageid, @dateinserted, @recipients, @cc, @bcc, @sender, @from, @subject, @bodyplain, @strippedtext, @strippedsignature, @strippedhtml, @attachments, @messageurl, @contentidmap, @messageheaders)";
             using (SqlConnection sqlConnection = new SqlConnection())
             {
                 sqlConnection.ConnectionString = _configuration["MailGun:ConnectionString"];
@@ -49,24 +50,31 @@ namespace MailGun_API.Infrastructure
                 sqlCommand.Parameters.AddWithValue("@messageurl", !string.IsNullOrWhiteSpace(mailGunDTO.MessageUrl) ? mailGunDTO.MessageUrl : string.Empty);
                 sqlCommand.Parameters.AddWithValue("@contentidmap", !string.IsNullOrWhiteSpace(mailGunDTO.ContentIdMap) ? mailGunDTO.ContentIdMap : string.Empty);
                 sqlCommand.Parameters.AddWithValue("@messageheaders", !string.IsNullOrWhiteSpace(mailGunDTO.MessageHeaders) ? mailGunDTO.MessageHeaders : string.Empty);
+                var outputIdParam = new SqlParameter();
+                outputIdParam = new SqlParameter("@id", SqlDbType.Int);
+                outputIdParam.Direction = ParameterDirection.Output;
+                sqlCommand.Parameters.Add(outputIdParam);
 
-                int result = sqlCommand.ExecuteNonQuery();
+                var result = sqlCommand.ExecuteScalar();
                 sqlConnection.Close();
+
+                var id = Convert.ToInt32(result);
+
                 //var test = File.ReadAllText(@"C:\Users\Bhagat\Desktop\json.txt");
                 // _ = SaveAttachments(test);
                 if (!string.IsNullOrEmpty(mailGunDTO.Attachments))
                 {
-                    _ = SaveAttachments(mailGunDTO.Attachments);
+                    _ = SaveAttachments(mailGunDTO.Attachments, Convert.ToInt32(id));
                 }
-               
-                return result > 0 ? true : false;
+
+                return Convert.ToInt32(result) > 0;
             }
         }
 
-        public bool SaveAttachments(string jsonAttachments)
+        public bool SaveAttachments(string jsonAttachments, int id)
         {
-            var attachmentsList  = JsonConvert.DeserializeObject<List<MailGunAttachment>>(jsonAttachments);
-            var path = Path.Combine(_environment.ContentRootPath, "/EmailAttachments/");
+            var attachmentsList = JsonConvert.DeserializeObject<List<MailGunAttachment>>(jsonAttachments);
+            var path = "D:/Sites/OFEC-Projects/MailgunAPI/EmailAttachments/" + id + "/";
 
             if (!Directory.Exists(path))
             {
@@ -75,6 +83,7 @@ namespace MailGun_API.Infrastructure
             foreach (var attachment in attachmentsList)
             {
                 GetAttachmentFromMailGun(attachment.Url, attachment.Name, path);
+                InsertAttachment(id, attachment.Name, "EmailAttachments/" + id + "/" + attachment.Name);
             }
             return true;
         }
@@ -91,20 +100,36 @@ namespace MailGun_API.Infrastructure
                 Stream stream = response.GetResponseStream();
                 MemoryStream ms = new MemoryStream();
                 var buffer = new Byte[4096];
-                var blockSize = stream.Read(buffer,0,4096);
+                var blockSize = stream.Read(buffer, 0, 4096);
                 if (blockSize > 0)
                 {
                     ms.Write(buffer, 0, blockSize);
                 }
-                using (FileStream fs = new FileStream(path+name, FileMode.Create))
+                using (FileStream fs = new FileStream(path + name, FileMode.Create))
                 {
-                    fs.Write(ms.ToArray(),0,Convert.ToInt32(ms.Length));
+                    fs.Write(ms.ToArray(), 0, Convert.ToInt32(ms.Length));
                 }
 
             }
             catch
             {
                 throw;
+            }
+        }
+
+        private void InsertAttachment(int InboxID, string FileName, string FilePath)
+        {
+            string insertSql = "INSERT INTO InboxAttachments(InboxID, FileName, FilePath) VALUES (@InboxID, @FileName, @FilePath)";
+            using (SqlConnection sqlConnection = new SqlConnection())
+            {
+                sqlConnection.ConnectionString = _configuration["MailGun:ConnectionString"];
+                sqlConnection.Open();
+                SqlCommand sqlCommand = new SqlCommand(insertSql, sqlConnection);
+                sqlCommand.Parameters.AddWithValue("@InboxID", InboxID);
+                sqlCommand.Parameters.AddWithValue("@FileName", !string.IsNullOrWhiteSpace(FileName) ? FileName : string.Empty);
+                sqlCommand.Parameters.AddWithValue("@FilePath", !string.IsNullOrWhiteSpace(FilePath) ? FilePath : string.Empty);
+                sqlCommand.ExecuteNonQuery();
+                sqlConnection.Close();
             }
         }
     }
