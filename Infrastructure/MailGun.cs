@@ -61,7 +61,7 @@ namespace MailGun_API.Infrastructure
                 var id = Convert.ToInt32(result);
 
                 //var test = File.ReadAllText(@"C:\Users\Bhagat\Desktop\json.txt");
-                // _ = SaveAttachments(test);
+                // _ = SaveAttachments(test, Convert.ToInt32(id));
                 if (!string.IsNullOrEmpty(mailGunDTO.Attachments))
                 {
                     _ = SaveAttachments(mailGunDTO.Attachments, Convert.ToInt32(id));
@@ -99,12 +99,17 @@ namespace MailGun_API.Infrastructure
                 HttpWebResponse response = (HttpWebResponse)request.GetResponse();
                 Stream stream = response.GetResponseStream();
                 MemoryStream ms = new MemoryStream();
-                var buffer = new Byte[4096];
-                var blockSize = stream.Read(buffer, 0, 4096);
-                if (blockSize > 0)
+                var buffer = new byte[16384];
+                int blockSize;
+                do
                 {
-                    ms.Write(buffer, 0, blockSize);
-                }
+                    blockSize = stream.Read(buffer, 0, 16384);
+                    if (blockSize > 0)
+                    {
+                        ms.Write(buffer, 0, blockSize);
+                    }
+                } while (blockSize > 0);
+                
                 using (FileStream fs = new FileStream(path + name, FileMode.Create))
                 {
                     fs.Write(ms.ToArray(), 0, Convert.ToInt32(ms.Length));
