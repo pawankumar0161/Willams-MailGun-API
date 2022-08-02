@@ -36,5 +36,6 @@ namespace MailGun_API.DTO
         public string ContentIdMap { get; set; }
         [BindProperty(Name = "message-headers")]
         public string MessageHeaders { get; set; }
+        public string To { get; set; }
     }
 }
